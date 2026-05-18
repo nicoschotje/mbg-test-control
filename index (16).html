@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MBG · Test Order Control Panel</title>
+<style>
+  :root{
+    --bg:#0a0a0c; --panel:#111114; --panel-2:#15151a; --line:#23232b;
+    --text:#e8e8ec; --muted:#8a8a96; --dim:#5a5a66;
+    --accent:#6ee7b7; --accent-2:#34d399; --warn:#fbbf24; --err:#f87171;
+    --pending:#fbbf24; --ok:#6ee7b7; --bad:#f87171;
+    --radius:14px; --radius-sm:8px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5}
+  body{min-height:100vh;display:flex;flex-direction:column}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  header{padding:24px 32px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:18px;font-weight:600;letter-spacing:.2px;display:flex;align-items:center;gap:12px}
+  header .pill{font-size:11px;font-weight:500;color:var(--accent);background:rgba(110,231,183,.08);border:1px solid rgba(110,231,183,.2);padding:4px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.5px}
+  header p{margin:6px 0 0;color:var(--muted);font-size:13px}
+  .wrap{flex:1;display:grid;grid-template-columns:380px 1fr;gap:0;min-height:0}
+  @media (max-width:880px){.wrap{grid-template-columns:1fr}}
+  .col-controls{padding:24px 32px;border-right:1px solid var(--line);background:var(--panel);overflow-y:auto}
+  .col-feed{padding:24px 32px;background:var(--bg);overflow-y:auto;min-height:600px}
+  fieldset{border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin:0 0 18px}
+  legend{padding:0 8px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.8px}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:500}
+  input[type=number],input[type=text],select{
+    width:100%;padding:10px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius-sm);
+    color:var(--text);font-family:var(--mono);font-size:14px;outline:none;transition:border .15s
+  }
+  input:focus,select:focus{border-color:var(--accent)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+  .row.full{grid-template-columns:1fr}
+  .checkbox{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text);cursor:pointer;user-select:none;margin-top:4px}
+  .checkbox input{width:16px;height:16px;accent-color:var(--accent)}
+  .hint{font-size:11px;color:var(--dim);margin-top:6px;line-height:1.4}
+  button{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:11px 16px;border-radius:var(--radius-sm);border:1px solid var(--line);
+    background:var(--panel-2);color:var(--text);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;
+    transition:all .15s;width:100%
+  }
+  button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.primary{background:var(--accent);color:#0a0a0c;border-color:var(--accent);font-weight:600}
+  button.primary:hover:not(:disabled){background:var(--accent-2);border-color:var(--accent-2);color:#0a0a0c}
+  button.danger{border-color:rgba(248,113,113,.4);color:var(--err)}
+  button.danger:hover:not(:disabled){border-color:var(--err);background:rgba(248,113,113,.08);color:var(--err)}
+  .btn-row{display:flex;gap:10px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px}
+  .stat .v{font-size:22px;font-weight:600;font-family:var(--mono);line-height:1}
+  .stat .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:6px}
+  .stat.ok .v{color:var(--ok)}
+  .stat.bad .v{color:var(--bad)}
+  .stat.pending .v{color:var(--pending)}
+  .progress{height:4px;background:var(--panel);border-radius:2px;overflow:hidden;margin-bottom:18px}
+  .progress > div{height:100%;background:var(--accent);width:0%;transition:width .3s}
+  .feed-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .feed-header h2{margin:0;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:500}
+  .feed-header .clear{font-size:11px;color:var(--muted);cursor:pointer;background:transparent;border:none;padding:2px 6px;width:auto}
+  .feed-header .clear:hover{color:var(--accent)}
+  .feed{display:flex;flex-direction:column;gap:8px}
+  .empty{padding:60px 20px;text-align:center;color:var(--dim);font-size:13px;border:1px dashed var(--line);border-radius:var(--radius)}
+  .empty .ic{font-size:32px;margin-bottom:10px;opacity:.5}
+  .order{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm);
+    padding:12px 14px;display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;align-items:center;
+    animation:slideIn .25s ease-out
+  }
+  @keyframes slideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  .order .badge{font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--panel-2);padding:3px 8px;border-radius:4px}
+  .order .who{font-size:13px;color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .order .who .sub{display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:2px;font-family:var(--mono)}
+  .order .total{font-family:var(--mono);font-size:13px;color:var(--text)}
+  .order .status{font-size:11px;font-weight:500;padding:4px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+  .status.queued{color:var(--muted);background:var(--panel-2);border:1px solid var(--line)}
+  .status.sending{color:var(--warn);background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25)}
+  .status.placed{color:var(--ok);background:rgba(110,231,183,.08);border:1px solid rgba(110,231,183,.25)}
+  .status.failed{color:var(--err);background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.25)}
+  .order.failed .who .sub{color:var(--err)}
+  footer{padding:14px 32px;border-top:1px solid var(--line);background:var(--panel);font-size:11px;color:var(--dim);display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap}
+  footer .links{display:flex;gap:18px}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>
+    <span>🧪 MBG · Test Order Control Panel</span>
+    <span class="pill">Manual processing mode</span>
+  </h1>
+  <p>Places synthetic orders into the live MBG storefront pipeline. Orders land at <strong>pending</strong> and wait for the client to process them in the dashboard. No virtual owner.</p>
+</header>
+
+<div class="wrap">
+
+  <aside class="col-controls">
+
+    <fieldset>
+      <legend>Run config</legend>
+      <div class="row">
+        <div>
+          <label for="count">Number of orders</label>
+          <input id="count" type="number" min="1" max="100" value="3" />
+        </div>
+        <div>
+          <label for="interval">Interval (sec)</label>
+          <input id="interval" type="number" min="0" max="600" value="0" />
+        </div>
+      </div>
+      <div class="row full">
+        <div>
+          <label for="startIdx">Persona start index</label>
+          <input id="startIdx" type="number" min="1" max="100" value="1" />
+          <div class="hint">Personas are deterministic (seeded). Default 1 → first run uses [TEST-001]…</div>
+        </div>
+      </div>
+      <div class="row full">
+        <label class="checkbox">
+          <input id="dryRun" type="checkbox" />
+          <span>Dry run (build payload, don't send)</span>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Actions</legend>
+      <div class="btn-row">
+        <button id="btnStart" class="primary">▶ Start placing orders</button>
+      </div>
+      <div class="btn-row" style="margin-top:10px">
+        <button id="btnStop" class="danger" disabled>■ Stop</button>
+      </div>
+      <div class="hint" style="margin-top:14px">
+        Tag prefix: <strong style="color:var(--accent)">[TEST-###]</strong> — matches existing <code style="font-family:var(--mono);background:var(--panel-2);padding:2px 5px;border-radius:3px">loadtest/cleanup.sql</code>.
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Quick links</legend>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+        <a href="https://mbg-dashboard-prod.netlify.app" target="_blank">→ Open client dashboard</a>
+        <a href="https://supabase.com/dashboard/project/ihnnipynpdtcbdfbpemq/sql" target="_blank">→ Supabase SQL (run cleanup)</a>
+      </div>
+    </fieldset>
+
+  </aside>
+
+  <main class="col-feed">
+
+    <div class="stats">
+      <div class="stat"><div class="v" id="sQueued">0</div><div class="l">Queued</div></div>
+      <div class="stat pending"><div class="v" id="sSending">0</div><div class="l">Sending</div></div>
+      <div class="stat ok"><div class="v" id="sPlaced">0</div><div class="l">Placed (pending)</div></div>
+      <div class="stat bad"><div class="v" id="sFailed">0</div><div class="l">Failed</div></div>
+    </div>
+
+    <div class="progress"><div id="bar"></div></div>
+
+    <div class="feed-header">
+      <h2>Order feed</h2>
+      <button id="btnClear" class="clear">Clear feed</button>
+    </div>
+
+    <div id="feed" class="feed">
+      <div class="empty">
+        <div class="ic">🧪</div>
+        Configure your run, then press <strong>Start</strong>.<br/>
+        Orders will appear here as they're placed and land in the dashboard at <strong>pending</strong>.
+      </div>
+    </div>
+
+  </main>
+
+</div>
+
+<footer>
+  <div>Mr. Beanie's Greenies · Test order panel · Built for manual-processing demos</div>
+  <div class="links">
+    <span>Edge: <code id="edgeStatus" style="color:var(--muted);font-family:var(--mono)">/place-order</code></span>
+    <span>Tag: <code style="color:var(--accent);font-family:var(--mono)">[TEST-###]</code></span>
+  </div>
+</footer>
+
+<script type="module">
+const CONFIG = {
+  SUPA_URL:'https://ihnnipynpdtcbdfbpemq.supabase.co',
+  SUPA_KEY:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlobm5pcHlucGR0Y2JkZmJwZW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NDIwNjcsImV4cCI6MjA5NDQxODA2N30.RgSQY_odbIR0vdfGqcdN0aTDyKlBcbrDC35iAKSGRKo',
+  EDGE_URL:'https://ihnnipynpdtcbdfbpemq.supabase.co/functions/v1',
+  TEST_TAG_PREFIX:'[TEST-',
+  RNG_SEED:42,
+  PAYMENT_WEIGHTS:[
+    {method:'gcash',weight:50},
+    {method:'maya',weight:25},
+    {method:'bank_transfer',weight:20},
+    {method:'usdt',weight:5},
+  ],
+  ZONE_WEIGHTS:[
+    {zone:'metro_near',fee:85,weight:55},
+    {zone:'metro_far',fee:150,weight:30},
+    {zone:'provincial',fee:250,weight:15},
+  ],
+};
+
+const PRODUCTS_FALLBACK = [
+  {id:'871812d6-dc87-4254-94df-65f315d45276',name:'Ace Ultra Premium 2G - Granny Smith Swirls',price:5500,emoji:'🅰️'},
+  {id:'c7027056-8803-4a3b-9ec7-ff97c862bea4',name:'Ace Ultra Premium 2G - Pineapple Twist',price:5500,emoji:'🅰️'},
+  {id:'c333692c-ca8d-47ca-b8ee-c2cfe430dcb1',name:'Ace Ultra Premium 2G - Rainbow Sherbet',price:5500,emoji:'🅰️'},
+  {id:'2b7d69d2-fe37-4f43-9493-97b3dfe03c74',name:'Ace Ultra Premium 2G - Raspberry Kiss',price:5500,emoji:'🅰️'},
+  {id:'b8086403-cf0b-48db-8792-6e34bfdd943d',name:'Bubblegum Soda Pop',price:800,emoji:'🥤'},
+  {id:'ae3988fe-7166-4aa2-a9c2-b44ddfab81b2',name:'Candy Clouds',price:1000,emoji:'🌿'},
+  {id:'831da769-b1a1-4ec9-9058-f342b6e902c8',name:'Cherry Bomb',price:1000,emoji:'🌿'},
+  {id:'b3243d1e-b3f4-43f7-beb7-7dd6e97f971a',name:'EXHALE EXBAR 1g - Birthday Cake Kush',price:2800,emoji:'😮‍💨'},
+  {id:'09601bdd-db6e-49fe-a504-b7834f1d1021',name:'EXHALE EXBAR 1g - Blue Dream',price:2800,emoji:'😮‍💨'},
+  {id:'a8cce7ed-90c2-46d8-8744-326de6512c4c',name:'EXHALE EXBAR 1g - Grape Ape',price:2800,emoji:'😮‍💨'},
+  {id:'04c49863-16f5-422d-b681-b3922d29e970',name:'EXHALE EXBAR 1g - Mango Runtz',price:2800,emoji:'😮‍💨'},
+  {id:'838e9945-0abf-4564-8bd8-6960ec85a955',name:'EXHALE EXBAR 1g - Maui Wowie',price:2800,emoji:'😮‍💨'},
+  {id:'3cf9c686-ba61-4347-8d23-ea720f2b327a',name:'EXHALE EXBAR 1g - Strawberry Cough',price:2800,emoji:'😮‍💨'},
+  {id:'f9fc4da5-3672-4741-8f30-a5af5f6f0d3d',name:'EXHALE EXBAR 1g - Super Lemon Haze',price:2800,emoji:'😮‍💨'},
+  {id:'f820e1d5-b12f-49e7-b556-bc5131165d51',name:'EXHALE EXBAR 1g - Watermelon Zkittles',price:2800,emoji:'😮‍💨'},
+  {id:'1e1edd69-d1c7-414b-9e19-633d69d75945',name:'EXHALE EXBAR 1g - White Widow',price:2800,emoji:'😮‍💨'},
+  {id:'fd0e0a7f-2035-4dcb-8c47-fd2895542547',name:'Gelato 45',price:1000,emoji:'🌿'},
+  {id:'0776d97d-fe71-4081-924d-aa46ed372649',name:'Grape Cake',price:1000,emoji:'🌿'},
+  {id:'3e74a06c-9550-48c3-b0aa-00b26ba227a2',name:'GulaMunchies',price:800,emoji:'🧋'},
+  {id:'567e23a3-5f6b-45cc-9b58-33f6b1d894cf',name:'Gumbo',price:1000,emoji:'🌿'},
+  {id:'6098f01e-8e1e-40f9-9278-57927bfdd30e',name:'Ice Cream Cake',price:1000,emoji:'🌿'},
+  {id:'9c61fb97-7425-410a-854b-43eb5b057068',name:'Kiwi',price:1000,emoji:'🌿'},
+  {id:'2657559a-67cd-49e1-8bc0-5c75aefef0f6',name:'Menage',price:1000,emoji:'🌿'},
+  {id:'4acd3385-27be-4123-a783-c226d0ec9346',name:'Minanos *',price:1000,emoji:'🌿'},
+  {id:'c364e416-9864-4e79-a000-104e872d82b1',name:'Mochi',price:1000,emoji:'🌿'},
+  {id:'f879a113-cfd4-40a7-8073-06fa84ff6ae7',name:'Red Runtz',price:1000,emoji:'🌿'},
+  {id:'7fee137f-b25d-4079-b348-8975cdde3dcf',name:'Violet FOG',price:1000,emoji:'🌿'},
+];
+let PRODUCTS = PRODUCTS_FALLBACK;
+
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function weightedPick(rng, items){
+  const total = items.reduce((s,i)=>s+i.weight,0);
+  let r = rng()*total;
+  for(const item of items){ r -= item.weight; if(r<=0) return item; }
+  return items[items.length-1];
+}
+
+const MALE_FIRST=['Juan','Jose','Antonio','Francisco','Manuel','Pedro','Roberto','Carlos','Eduardo','Miguel','Ramon','Luis','Alfredo','Fernando','Ricardo','Mario','Danilo','Renato','Ernesto','Rodrigo','Vicente','Cesar','Rolando','Armando','Emmanuel','Florante','Gilberto','Harold','Jerome','Kevin','Leonardo','Marcelo','Nathaniel','Orlando','Patricio','Rafael','Salvador','Tomas','Victor','Wilfredo','Archie','Benito','Crisanto','Dominic','Efren','Genaro','Herminio','Isidro','Jaime','Klaus'];
+const FEMALE_FIRST=['Maria','Ana','Rosa','Luz','Carmen','Patricia','Marilou','Corazon','Maricel','Rowena','Lilibeth','Gemma','Cristina','Jennifer','Michelle','Karen','Aileen','Bernadette','Clara','Dolores','Estrella','Felicidad','Gloria','Hazel','Irene','Jasmine','Katherine','Lorena','Marilyn','Nenita','Ofelia','Priscilla','Queenie','Rebecca','Susana','Teresa','Vivian','Wendy','Yvonne','Abigail','Blessie','Cecille','Daisy','Eloisa','Fe','Grace','Honey','Imelda','Joy','Kristine'];
+const LAST_NAMES=['Santos','Reyes','Cruz','Bautista','Ocampo','Garcia','Mendoza','Torres','Ramos','Aquino','Gonzales','Lopez','Diaz','Flores','Villanueva','Fernandez','Castillo','Rodriguez','Bernardo','Alvarez','Morales','Castro','Vega','Enriquez','Fajardo','Gutierrez','Hernandez','Ignacio','Jimenez','Lacson','Macapagal','Navarro','Orosco','Pangilinan','Quiambao','Salazar','Tan','Umali','Valenzuela','Yap','Zulueta','Abella','Borja','Cortez','Dacera','Estrada','Fabian','Galang','Halili'];
+
+const METRO_NEAR_ADDRS=[
+  {addr:'123 Rizal Ave, Sta. Cruz, Manila',lat:14.6099,lng:120.9836},
+  {addr:'456 Quezon Ave, Quezon City',lat:14.6490,lng:121.0273},
+  {addr:'789 España Blvd, Sampaloc, Manila',lat:14.6115,lng:121.0067},
+  {addr:'21 Mabini St, Malate, Manila',lat:14.5647,lng:120.9916},
+  {addr:'55 Taft Ave, Pasay City',lat:14.5362,lng:120.9985},
+  {addr:'10 Aurora Blvd, Cubao, Quezon City',lat:14.6196,lng:121.0548},
+  {addr:'7 Shaw Blvd, Mandaluyong',lat:14.5847,lng:121.0244},
+  {addr:'33 Boni Ave, Mandaluyong',lat:14.5778,lng:121.0312},
+  {addr:'88 Retiro St, Sta. Mesa, Manila',lat:14.6006,lng:121.0156},
+  {addr:'14 Kamuning Rd, Quezon City',lat:14.6328,lng:121.0337},
+  {addr:'22 T. Alonzo St, Sta. Cruz, Manila',lat:14.6144,lng:120.9842},
+  {addr:'5 Leveriza St, Malate, Manila',lat:14.5703,lng:121.0008},
+];
+const METRO_FAR_ADDRS=[
+  {addr:'100 Marcos Hwy, Cainta, Rizal',lat:14.5712,lng:121.1119},
+  {addr:'250 Ortigas Ave Ext, Pasig City',lat:14.5714,lng:121.0798},
+  {addr:'67 Katipunan Ave, Loyola Heights, QC',lat:14.6448,lng:121.0790},
+  {addr:'3 Congressional Ave, Bahay Toro, QC',lat:14.6921,lng:121.0366},
+  {addr:'18 Narra St, Novaliches, Quezon City',lat:14.7290,lng:121.0470},
+  {addr:'44 Aguinaldo Hwy, Imus, Cavite',lat:14.4213,lng:120.9377},
+  {addr:'9 Gov. Pascual Ave, Malabon',lat:14.6649,lng:120.9570},
+  {addr:'77 MacArthur Hwy, Caloocan City',lat:14.6487,lng:120.9688},
+  {addr:'31 J. Yulo Dr, Las Piñas City',lat:14.4478,lng:121.0000},
+  {addr:'200 Alabang-Zapote Rd, Muntinlupa',lat:14.4081,lng:121.0441},
+];
+const PROVINCIAL_ADDRS=[
+  {addr:'1 Maharlika Hwy, San Pablo City, Laguna',lat:14.0689,lng:121.3247},
+  {addr:'5 Session Rd, Baguio City',lat:16.4121,lng:120.5930},
+  {addr:'20 Colon St, Cebu City',lat:10.2929,lng:123.9004},
+  {addr:'8 Roxas Ave, Roxas City, Capiz',lat:11.5856,lng:122.7519},
+  {addr:'11 R. Magsaysay Ave, Davao City',lat:7.0731,lng:125.6128},
+  {addr:'3 Burgos St, Lipa City, Batangas',lat:13.9411,lng:121.1639},
+  {addr:'17 Rizal St, Lucena City, Quezon',lat:13.9333,lng:121.6167},
+  {addr:'9 MacArthur Rd, Pampanga',lat:15.0794,lng:120.6200},
+];
+
+function genPhone(rng){
+  const prefix=['0917','0918','0919','0920','0921','0922','0923','0926','0927','0928','0929','0939','0947','0956','0961','0966','0967','0977','0994','0995','0998','0999'];
+  const p=prefix[Math.floor(rng()*prefix.length)];
+  const mid=String(Math.floor(rng()*900)+100);
+  const end=String(Math.floor(rng()*9000)+1000);
+  return `${p}-${mid}-${end}`;
+}
+
+function buildPersonas(total=100){
+  const rng=mulberry32(CONFIG.RNG_SEED);
+  const personas=[];
+  for(let i=0;i<total;i++){
+    const idx=i+1;
+    const isMale=rng()<0.5;
+    const firstPool=isMale?MALE_FIRST:FEMALE_FIRST;
+    const first=firstPool[Math.floor(rng()*firstPool.length)];
+    const last=LAST_NAMES[Math.floor(rng()*LAST_NAMES.length)];
+    const payment=weightedPick(rng,CONFIG.PAYMENT_WEIGHTS);
+    const zoneEntry=weightedPick(rng,CONFIG.ZONE_WEIGHTS);
+    let addrPool;
+    if(zoneEntry.zone==='metro_near') addrPool=METRO_NEAR_ADDRS;
+    else if(zoneEntry.zone==='metro_far') addrPool=METRO_FAR_ADDRS;
+    else addrPool=PROVINCIAL_ADDRS;
+    const loc=addrPool[Math.floor(rng()*addrPool.length)];
+    personas.push({
+      index:idx,
+      tag:`[TEST-${String(idx).padStart(3,'0')}]`,
+      customer_name:`[TEST-${String(idx).padStart(3,'0')}] ${first} ${last}`,
+      customer_phone:genPhone(rng),
+      delivery_address:loc.addr,
+      delivery_lat:loc.lat??null,
+      delivery_lng:loc.lng??null,
+      delivery_zone:zoneEntry.zone,
+      delivery_fee:zoneEntry.fee,
+      payment_method:payment.method,
+      receipt_url:null,
+      notes:'Test order — please process manually.',
+      telegram_user_id:null,
+      telegram_chat_id:null,
+    });
+  }
+  return personas;
+}
+const PERSONAS = buildPersonas(100);
+
+function pickItems(rng){
+  const shuffled=[...PRODUCTS].sort(()=>rng()-0.5);
+  const count=rng()<0.35?2:1;
+  return shuffled.slice(0,Math.min(count,shuffled.length)).map(p=>({
+    id:p.id,name:p.name,emoji:p.emoji||'🌿',
+    price:parseFloat(p.price),qty:1,quantity:1,
+    image_url:p.image_url||null,
+  }));
+}
+
+async function placeOrder(persona, {dryRun=false}={}){
+  const rng=mulberry32(persona.index*1000+CONFIG.RNG_SEED);
+  const items=pickItems(rng);
+  const subtotal=items.reduce((s,i)=>s+parseFloat(i.price)*i.qty,0);
+  const total=subtotal+persona.delivery_fee;
+
+  const payload={
+    customer_name:persona.customer_name,
+    customer_phone:persona.customer_phone,
+    delivery_address:persona.delivery_address,
+    delivery_lat:persona.delivery_lat,
+    delivery_lng:persona.delivery_lng,
+    delivery_zone:persona.delivery_zone,
+    delivery_fee:persona.delivery_fee,
+    subtotal:parseFloat(subtotal.toFixed(2)),
+    total:parseFloat(total.toFixed(2)),
+    discount_amount:0,
+    promo_code:null,
+    payment_method:persona.payment_method,
+    receipt_url:persona.receipt_url,
+    notes:persona.notes,
+    telegram_user_id:persona.telegram_user_id,
+    telegram_chat_id:persona.telegram_chat_id,
+    items,
+  };
+
+  if(dryRun){
+    return {ok:true,dryRun:true,total,items,payload};
+  }
+
+  const res=await fetch(`${CONFIG.EDGE_URL}/place-order`,{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'apikey':CONFIG.SUPA_KEY,
+      'Authorization':`Bearer ${CONFIG.SUPA_KEY}`,
+    },
+    body:JSON.stringify(payload),
+  });
+  const text=await res.text();
+  let body; try{ body=JSON.parse(text); } catch{ body={raw:text}; }
+  if(!res.ok){
+    return {ok:false,status:res.status,error:body?.error||body?.message||text.slice(0,180),total,items};
+  }
+  const orderId=body?.order_id||body?.id||body?.data?.id;
+  return {ok:true,orderId,total,items};
+}
+
+async function refreshProducts(){
+  try{
+    const url=`${CONFIG.SUPA_URL}/rest/v1/products?select=id,name,price,emoji,stock_qty&is_active=eq.true&order=name`;
+    const r=await fetch(url,{headers:{apikey:CONFIG.SUPA_KEY,Authorization:`Bearer ${CONFIG.SUPA_KEY}`}});
+    if(!r.ok) throw new Error('http '+r.status);
+    const data=await r.json();
+    const inStock=data.filter(p=>p.stock_qty===null||p.stock_qty===undefined||Number(p.stock_qty)>0);
+    if(inStock.length>0){
+      PRODUCTS=inStock;
+      console.log(`[panel] live products loaded: ${PRODUCTS.length}`);
+    }
+  } catch(e){
+    console.warn('[panel] live product fetch failed; using snapshot:',e.message);
+  }
+}
+
+const $=id=>document.getElementById(id);
+const feed=$('feed');
+const stats={queued:0,sending:0,placed:0,failed:0};
+let abortFlag=false;
+
+function updateStats(){
+  $('sQueued').textContent=stats.queued;
+  $('sSending').textContent=stats.sending;
+  $('sPlaced').textContent=stats.placed;
+  $('sFailed').textContent=stats.failed;
+  const total=stats.placed+stats.failed+stats.sending+stats.queued;
+  const done=stats.placed+stats.failed;
+  $('bar').style.width=total>0?`${(done/total)*100}%`:'0%';
+}
+
+function clearEmpty(){
+  const e=feed.querySelector('.empty');
+  if(e) e.remove();
+}
+
+function addRow(persona,total){
+  clearEmpty();
+  const row=document.createElement('div');
+  row.className='order';
+  row.dataset.idx=persona.index;
+  row.innerHTML=`
+    <span class="badge">${persona.tag.replace(/[\[\]]/g,'')}</span>
+    <span class="who">${persona.customer_name.replace(persona.tag,'').trim()}
+      <span class="sub">${persona.delivery_zone} · ${persona.payment_method}</span>
+    </span>
+    <span class="total">₱${total.toFixed(2)}</span>
+    <span class="status queued">queued</span>
+  `;
+  feed.prepend(row);
+  return row;
+}
+
+function setRowStatus(row,statusClass,text,subText){
+  const s=row.querySelector('.status');
+  s.className=`status ${statusClass}`;
+  s.innerHTML = statusClass==='sending' ? `<span class="spin"></span> ${text}` : text;
+  if(subText){
+    const sub=row.querySelector('.who .sub');
+    if(sub) sub.textContent=subText;
+  }
+  if(statusClass==='failed') row.classList.add('failed');
+}
+
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+async function startRun(){
+  abortFlag=false;
+  const count=Math.max(1,Math.min(100,parseInt($('count').value,10)||1));
+  const interval=Math.max(0,Math.min(600,parseInt($('interval').value,10)||0));
+  const startIdx=Math.max(1,Math.min(100,parseInt($('startIdx').value,10)||1));
+  const dryRun=$('dryRun').checked;
+
+  if(startIdx+count-1>100){
+    alert(`Persona pool is 100. Start=${startIdx} + Count=${count} would exceed it.`);
+    return;
+  }
+
+  $('btnStart').disabled=true;
+  $('btnStop').disabled=false;
+  ['count','interval','startIdx','dryRun'].forEach(id=>$(id).disabled=true);
+
+  const rows=[];
+  for(let i=0;i<count;i++){
+    const persona=PERSONAS[startIdx-1+i];
+    const rng=mulberry32(persona.index*1000+CONFIG.RNG_SEED);
+    const items=pickItems(rng);
+    const subtotal=items.reduce((s,it)=>s+it.price*it.qty,0);
+    const total=subtotal+persona.delivery_fee;
+    const row=addRow(persona,total);
+    rows.push({persona,row});
+    stats.queued++;
+  }
+  updateStats();
+
+  for(let i=0;i<rows.length;i++){
+    if(abortFlag) break;
+    const {persona,row}=rows[i];
+    stats.queued--; stats.sending++; updateStats();
+    setRowStatus(row,'sending','sending');
+
+    let result;
+    try{ result=await placeOrder(persona,{dryRun}); }
+    catch(e){ result={ok:false,error:e.message}; }
+
+    stats.sending--;
+    if(result.ok){
+      stats.placed++;
+      const label = dryRun ? 'dry-run' : 'pending';
+      const sub = result.orderId
+        ? `${persona.delivery_zone} · ${persona.payment_method} · id ${String(result.orderId).slice(0,8)}…`
+        : `${persona.delivery_zone} · ${persona.payment_method} · dry run`;
+      setRowStatus(row,'placed',label,sub);
+    } else {
+      stats.failed++;
+      setRowStatus(row,'failed','failed',`error: ${(result.error||'unknown').toString().slice(0,120)}`);
+    }
+    updateStats();
+
+    if(i<rows.length-1 && interval>0 && !abortFlag){
+      await sleep(interval*1000);
+    }
+  }
+
+  $('btnStart').disabled=false;
+  $('btnStop').disabled=true;
+  ['count','interval','startIdx','dryRun'].forEach(id=>$(id).disabled=false);
+}
+
+$('btnStart').addEventListener('click',startRun);
+$('btnStop').addEventListener('click',()=>{ abortFlag=true; });
+$('btnClear').addEventListener('click',()=>{
+  feed.innerHTML='<div class="empty"><div class="ic">🧪</div>Configure your run, then press <strong>Start</strong>.<br/>Orders will appear here as they\'re placed and land in the dashboard at <strong>pending</strong>.</div>';
+  stats.queued=stats.sending=stats.placed=stats.failed=0;
+  updateStats();
+});
+
+refreshProducts();
+</script>
+
+</body>
+</html>
