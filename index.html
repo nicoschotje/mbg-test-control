@@ -151,6 +151,10 @@
         <a href="https://mbg-dashboard-prod.netlify.app" target="_blank">→ Open client dashboard</a>
         <a href="https://supabase.com/dashboard/project/ihnnipynpdtcbdfbpemq/sql" target="_blank">→ Supabase SQL (run cleanup)</a>
       </div>
+      <div style="margin-top:14px">
+        <button id="btnClearTest" class="danger" style="width:100%">🗑 Clear test orders</button>
+        <div id="clearMsg" style="font-size:11px;margin-top:8px;min-height:16px"></div>
+      </div>
     </fieldset>
 
   </aside>
@@ -536,6 +540,39 @@ $('btnClear').addEventListener('click',()=>{
   feed.innerHTML='<div class="empty"><div class="ic">🧪</div>Configure your run, then press <strong>Start</strong>.<br/>Orders will appear here as they\'re placed and land in the dashboard at <strong>pending</strong>.</div>';
   stats.queued=stats.sending=stats.placed=stats.failed=0;
   updateStats();
+});
+
+$('btnClearTest').addEventListener('click', async () => {
+  const confirmed = confirm('Delete all [TEST-###] orders and customers? This cannot be undone.');
+  if (!confirmed) return;
+  const btn = $('btnClearTest');
+  const msg = $('clearMsg');
+  btn.disabled = true;
+  btn.textContent = 'Clearing…';
+  msg.textContent = '';
+  msg.style.color = 'var(--muted)';
+  try {
+    // Delete orders first (may reference store_customers)
+    const r1 = await fetch(`${CONFIG.SUPA_URL}/rest/v1/orders?customer_name=ilike.*%5BTEST-*`, {
+      method: 'DELETE',
+      headers: { apikey: CONFIG.SUPA_KEY, Authorization: `Bearer ${CONFIG.SUPA_KEY}`, Prefer: 'return=minimal' }
+    });
+    if (!r1.ok) throw new Error(`Orders delete failed: ${r1.status}`);
+    // Then delete test customers
+    const r2 = await fetch(`${CONFIG.SUPA_URL}/rest/v1/store_customers?customer_name=ilike.*%5BTEST-*`, {
+      method: 'DELETE',
+      headers: { apikey: CONFIG.SUPA_KEY, Authorization: `Bearer ${CONFIG.SUPA_KEY}`, Prefer: 'return=minimal' }
+    });
+    if (!r2.ok) throw new Error(`Customers delete failed: ${r2.status}`);
+    msg.textContent = '✓ Test orders and customers deleted';
+    msg.style.color = 'var(--ok)';
+  } catch (e) {
+    msg.textContent = `✗ Error: ${e.message}`;
+    msg.style.color = 'var(--err)';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🗑 Clear test orders';
+  }
 });
 
 refreshProducts();
